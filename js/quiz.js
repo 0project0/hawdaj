@@ -23,6 +23,22 @@ const QuizGame = (() => {
         return currentSpeaker;
     }
 
+    function cleanQuestionsArray(qs) {
+        return (qs || []).map(q => {
+            if (!q) return q;
+            const originalOptions = q.options || [];
+            const correctVal = originalOptions[q.correct];
+            const cleanedOptions = originalOptions.map(o => (o || '').trim()).filter(Boolean);
+            let correctIdx = cleanedOptions.indexOf(correctVal ? correctVal.trim() : '');
+            if (correctIdx === -1) correctIdx = 0;
+            return {
+                ...q,
+                options: cleanedOptions,
+                correct: correctIdx
+            };
+        });
+    }
+
     // Lifelines
     let lifelines = { fiftyFifty: 2, skip: 1, hint: 1 };
 
@@ -72,10 +88,10 @@ const QuizGame = (() => {
         const randomize = data.devSettings?.quizRandomize !== false;
 
         if (cat === 'general') {
-            questions = [...data.quizGeneral];
+            questions = cleanQuestionsArray([...data.quizGeneral]);
             if (randomize) questions = shuffleArray(questions);
         } else if (cat === 'episode' && ep) {
-            questions = [...(data.quizEpisodes[ep] || [])];
+            questions = cleanQuestionsArray([...(data.quizEpisodes[ep] || [])]);
             if (randomize) questions = shuffleArray(questions);
         }
 
@@ -175,12 +191,12 @@ const QuizGame = (() => {
         }
 
         // Determine how many options to show
-        const optionsCount = (HawdajData.get().devSettings?.quizOptionsCount) || 4;
+        const optionsCount = Math.min((HawdajData.get().devSettings?.quizOptionsCount) || 4, q.options.length);
 
         // Build shuffled indices only for the options we will show
         // Make sure the correct answer index is remapped within the visible range
         const correctIdx = q.correct;
-        let visibleIndices = [0, 1, 2, 3].slice(0, optionsCount);
+        let visibleIndices = Array.from({ length: q.options.length }, (_, k) => k).slice(0, optionsCount);
         // If correct option is outside visible range, swap it in
         if (!visibleIndices.includes(correctIdx)) {
             visibleIndices[optionsCount - 1] = correctIdx;
@@ -205,6 +221,7 @@ const QuizGame = (() => {
             } else {
                 btn.style.display = 'none';
                 btn.className = 'quiz-option disabled';
+                btn.dataset.idx = '-1';
             }
         });
 
@@ -572,12 +589,16 @@ const QuizGame = (() => {
         const wrongOptions = [];
 
         optBtns.forEach(btn => {
+            if (btn.style.display === 'none') return;
             const idx = parseInt(btn.dataset.idx);
             if (idx !== q.correct) wrongOptions.push(btn);
         });
 
+        const countToRemove = activeOpts.length - 2;
+        if (countToRemove <= 0) return;
+
         shuffleArrayInPlace(wrongOptions);
-        wrongOptions.slice(0, 2).forEach(btn => {
+        wrongOptions.slice(0, countToRemove).forEach(btn => {
             btn.classList.add('disabled');
             btn.style.opacity = '0.2';
         });
@@ -746,12 +767,16 @@ const QuizGame = (() => {
         const wrongOptions = [];
 
         optBtns.forEach(btn => {
+            if (btn.style.display === 'none') return;
             const idx = parseInt(btn.dataset.idx);
             if (idx !== q.correct) wrongOptions.push(btn);
         });
 
+        const countToRemove = activeOpts.length - 2;
+        if (countToRemove <= 0) return;
+
         shuffleArrayInPlace(wrongOptions);
-        wrongOptions.slice(0, 2).forEach(btn => {
+        wrongOptions.slice(0, countToRemove).forEach(btn => {
             btn.classList.add('disabled', 'wrong');
             btn.style.transition = 'all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
             setTimeout(() => {
