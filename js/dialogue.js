@@ -1,5 +1,5 @@
 /* ============================================
-   HAWDAJ GAME — Intro Dialogue System
+   HAWDAJ GAME — Intro & Sequence Dialogue System
    ============================================ */
 
 const HawdajDialogue = (() => {
@@ -8,8 +8,12 @@ const HawdajDialogue = (() => {
     let azzamImgEl = null;
     let textEl = null;
     let nextBtn = null;
+    let tail = null;
     let audioObj = null;
     let onCompleteCallback = null;
+
+    let currentStepIndex = 0;
+    let activeSequence = null;
 
     function init() {
         if (document.getElementById('dialogue-overlay')) return;
@@ -39,13 +43,15 @@ const HawdajDialogue = (() => {
             position: relative; text-align: center; width: clamp(260px, 75%, 500px); pointer-events: auto;
             transform: scale(0.8); opacity: 0; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         `;
+
         // Bubble tail (pointing to Jadel on the left side in RTL)
-        const tail = document.createElement('div');
+        tail = document.createElement('div');
         tail.style.cssText = `
             content: ''; position: absolute; bottom: -24px; left: 25%; right: auto;
             border-width: 25px 25px 0; border-style: solid;
             border-color: #fff transparent transparent transparent;
             display: block; width: 0; filter: drop-shadow(0px 5px 0px var(--accent-primary));
+            transition: left 0.3s ease;
         `;
         bubble.appendChild(tail);
 
@@ -57,7 +63,6 @@ const HawdajDialogue = (() => {
         nextBtn.textContent = 'يلا نبدأ! ▶';
         nextBtn.className = 'btn btn-primary';
         nextBtn.style.cssText = 'margin-top: 20px; font-size: var(--fs-md); padding: 10px 30px;';
-        nextBtn.onclick = close;
         bubble.appendChild(nextBtn);
 
         wrapper.appendChild(bubble);
@@ -70,10 +75,10 @@ const HawdajDialogue = (() => {
         `;
 
         azzamImgEl = document.createElement('img');
-        azzamImgEl.style.cssText = `width: clamp(120px, 35vw, 250px); max-width: 250px; object-fit: contain; filter: drop-shadow(0 10px 20px rgba(0,0,0,0.5));`;
+        azzamImgEl.style.cssText = `width: clamp(120px, 35vw, 250px); max-width: 250px; object-fit: contain; filter: drop-shadow(0 10px 20px rgba(0,0,0,0.5)); transition: all 0.3s ease;`;
 
         jadelImgEl = document.createElement('img');
-        jadelImgEl.style.cssText = `width: clamp(130px, 38vw, 280px); max-width: 280px; object-fit: contain; filter: drop-shadow(0 10px 20px rgba(0,0,0,0.5));`;
+        jadelImgEl.style.cssText = `width: clamp(130px, 38vw, 280px); max-width: 280px; object-fit: contain; filter: drop-shadow(0 10px 20px rgba(0,0,0,0.5)); transition: all 0.3s ease;`;
 
         charsContainer.appendChild(azzamImgEl);
         charsContainer.appendChild(jadelImgEl);
@@ -84,25 +89,21 @@ const HawdajDialogue = (() => {
     }
 
     /**
-     * Show game intro dialogue
-     * @param {string} text The text Jadel will say
-     * @param {string} audioPath The audio file path
-     * @param {Function} onComplete Callback when user clicks "Start"
+     * Show a sequence of dialogue steps
+     * @param {Array} sequence Array of objects: { character, pose, text, audio }
+     * @param {Function} onComplete Callback when sequence completes
      */
-    function showIntro(text, audioPath, onComplete = null) {
+    function play(sequence, onComplete = null) {
         if (!container) init();
         onCompleteCallback = onComplete;
-
-        // Set Images
-        jadelImgEl.src = HawdajData.getCharacterPose('jadel', 'talking') || 'assets/char/El jadel.jpeg';
-        azzamImgEl.src = HawdajData.getCharacterPose('azzam', 'happy') || 'assets/char/azzam.jpeg';
+        activeSequence = sequence;
+        currentStepIndex = 0;
 
         container.style.display = 'flex';
         // forced reflow
         container.offsetHeight;
         container.style.opacity = '1';
 
-        // Animate in
         const wrapper = container.children[0];
         const bubble = wrapper.children[0];
         const charsContainer = wrapper.children[1];
@@ -111,13 +112,81 @@ const HawdajDialogue = (() => {
         setTimeout(() => {
             bubble.style.transform = 'scale(1)';
             bubble.style.opacity = '1';
-            typeText(text);
-
-            if (audioPath) {
-                audioObj = new Audio(audioPath);
-                audioObj.play().catch(e => console.warn('Intro audio failed', e));
-            }
+            showStep(0);
         }, 300);
+    }
+
+    function showStep(index) {
+        if (!activeSequence || index >= activeSequence.length) {
+            close();
+            return;
+        }
+
+        const step = activeSequence[index];
+        const char = step.character;
+
+        // Stop current audio
+        if (audioObj) {
+            audioObj.pause();
+            audioObj = null;
+        }
+
+        // Set Images based on current pose
+        jadelImgEl.src = HawdajData.getCharacterPose('jadel', char === 'jadel' ? step.pose : 'idle') || 'assets/char/El jadel.jpeg';
+        azzamImgEl.src = HawdajData.getCharacterPose('azzam', char === 'azzam' ? step.pose : 'idle') || 'assets/char/azzam.jpeg';
+
+        // Highlight active speaker
+        if (char === 'jadel') {
+            jadelImgEl.style.opacity = '1';
+            jadelImgEl.style.transform = 'scale(1.05)';
+            azzamImgEl.style.opacity = '0.6';
+            azzamImgEl.style.transform = 'scale(0.95)';
+            if (tail) tail.style.left = '25%';
+        } else {
+            azzamImgEl.style.opacity = '1';
+            azzamImgEl.style.transform = 'scale(1.05)';
+            jadelImgEl.style.opacity = '0.6';
+            jadelImgEl.style.transform = 'scale(0.95)';
+            if (tail) tail.style.left = '75%';
+        }
+
+        // Type the text
+        typeText(step.text);
+
+        // Update button text
+        if (index === activeSequence.length - 1) {
+            nextBtn.textContent = 'يلا نبدأ! ▶';
+        } else {
+            nextBtn.textContent = 'التالي ➡️';
+        }
+
+        // Play audio if available
+        if (step.audio) {
+            audioObj = new Audio(step.audio);
+            audioObj.play().catch(e => console.warn('Dialogue audio failed', e));
+        }
+
+        // Setup button click
+        nextBtn.onclick = () => {
+            HawdajAudio.SFX.tap();
+            currentStepIndex++;
+            if (currentStepIndex >= activeSequence.length) {
+                close();
+                if (onCompleteCallback) onCompleteCallback();
+            } else {
+                showStep(currentStepIndex);
+            }
+        };
+    }
+
+    /**
+     * Show game intro dialogue (backward compatibility)
+     * @param {string} text The text Jadel will say
+     * @param {string} audioPath The audio file path
+     * @param {Function} onComplete Callback when user clicks "Start"
+     */
+    function showIntro(text, audioPath, onComplete = null) {
+        play([{ character: 'jadel', pose: 'talking', text: text, audio: audioPath }], onComplete);
     }
 
     function typeText(text) {
@@ -141,7 +210,6 @@ const HawdajDialogue = (() => {
             audioObj.pause();
             audioObj = null;
         }
-        HawdajAudio.SFX.tap();
 
         const wrapper = container.children[0];
         const bubble = wrapper.children[0];
@@ -160,6 +228,7 @@ const HawdajDialogue = (() => {
 
     return {
         init,
+        play,
         showIntro,
         close
     };
