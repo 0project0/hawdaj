@@ -73,6 +73,13 @@ window.HawdajFirebase = {
         });
     },
 
+    pushCompetitions(competitions) {
+        const compRef = ref(db, 'global_game_data/competitions');
+        return set(compRef, competitions || []).catch(err => {
+            console.error('Firebase competitions push failed:', err);
+        });
+    },
+
     // Append a newly registered user to Firebase without overwriting the entire global game data
     appendUserToGlobal(userObj) {
         if (!userObj || !userObj.name) return;
