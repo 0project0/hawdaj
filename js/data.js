@@ -491,11 +491,21 @@ const HawdajData = (() => {
     }
   }
 
+  function saveCompetitionsToFirebase() {
+    if (window.HawdajFirebase && window.HawdajFirebase.isReady) {
+      window.HawdajFirebase.pushCompetitions(data.competitions || []);
+    }
+  }
+
   function save(isGlobalChange = false) {
     // 1. Sync to Firebase first so a local quota error doesn't block global sync
     try {
-      if (isGlobalChange || (window.AdminPanel && window.AdminPanel.isLoggedIn && !window.blockGlobalSync)) {
-        saveGlobalToFirebase();
+      if (window.AdminPanel && window.AdminPanel.isLoggedIn) {
+        if (isGlobalChange || !window.blockGlobalSync) {
+          saveGlobalToFirebase();
+        }
+      } else if (isGlobalChange) {
+        saveCompetitionsToFirebase();
       }
     } catch (e) {
       console.warn('Failed to trigger Firebase sync', e);
